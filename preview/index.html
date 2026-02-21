@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Intelligent India App Preview</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body{font-family:Inter,system-ui,sans-serif;background:#f3f4f6}
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-6">
+  <div class="w-[390px] h-[844px] bg-white rounded-[36px] shadow-2xl border border-gray-200 overflow-hidden">
+    <div class="bg-gray-900 text-white text-[11px] py-2 text-center">Breaking News: Intelligent India Magazine is now live.</div>
+    <div class="px-4 py-3 border-b bg-white sticky top-0 z-10">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-xl font-bold">Intelligent India</h1>
+          <p class="text-[10px] tracking-widest text-red-700 font-semibold">MAGAZINE</p>
+        </div>
+        <button id="refresh" class="text-sm px-3 py-1 rounded-full border border-gray-300">Refresh</button>
+      </div>
+    </div>
+
+    <main id="content" class="h-[760px] overflow-y-auto p-4 space-y-5 bg-gray-50">
+      <div id="loading" class="text-gray-500 text-sm">Loading preview from Tumblr API…</div>
+    </main>
+  </div>
+
+<script>
+const API_KEY = 'pIigNuNOSzMNtzJeoOaJTsGu3yU9nk9GWi3MFevkN1VtBdyUDb';
+const BLOG = 'intelligentindia-blog.tumblr.com';
+const FALLBACK = 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=1200&auto=format&fit=crop&q=60';
+const sections = ['Politics','Travel','Top Stories','Technology','Entertainment'];
+let count=0;
+function jsonp(url){
+  return new Promise((resolve,reject)=>{
+    const cb='cb'+(++count);
+    window[cb]=(data)=>{delete window[cb];script.remove();resolve(data)};
+    const script=document.createElement('script');
+    script.src=url+(url.includes('?')?'&':'?')+'jsonp='+cb;
+    script.onerror=()=>{delete window[cb];script.remove();reject(new Error('JSONP failed'))};
+    document.body.appendChild(script);
+  });
+}
+function excerpt(html=''){
+  const d=document.createElement('div');d.innerHTML=html;
+  const t=(d.textContent||'').trim();
+  return t.length>85?t.slice(0,85)+'…':t;
+}
+function image(post){
+  if(post.photos && post.photos[0]?.original_size?.url) return post.photos[0].original_size.url;
+  const d=document.createElement('div'); d.innerHTML=post.body||post.caption||post.description||'';
+  return d.querySelector('img')?.src || FALLBACK;
+}
+function card(post,featured=false){
+  return `<article class="bg-white rounded-xl border border-gray-200 overflow-hidden ${featured?'shadow':'shadow-sm'}">
+    <img src="${image(post)}" class="w-full ${featured?'h-44':'h-36'} object-cover" onerror="this.src='${FALLBACK}'"/>
+    <div class="p-3">
+      <div class="text-[10px] text-gray-500 mb-1">${new Date(post.timestamp*1000).toLocaleDateString('en-IN')}</div>
+      <h3 class="font-semibold leading-tight text-sm ${featured?'text-base':''}">${post.title||post.summary||'Untitled Story'}</h3>
+      <p class="text-xs text-gray-600 mt-1">${excerpt(post.body||post.caption||post.description||'')}</p>
+    </div>
+  </article>`;
+}
+async function load(){
+  const root=document.getElementById('content');
+  root.innerHTML='<div class="text-gray-500 text-sm">Loading preview from Tumblr API…</div>';
+  try{
+    const featuredResp=await jsonp(`https://api.tumblr.com/v2/blog/${BLOG}/posts?api_key=${API_KEY}&limit=1&tag=Featured`);
+    const featured=(featuredResp.response.posts[0]) || (await jsonp(`https://api.tumblr.com/v2/blog/${BLOG}/posts?api_key=${API_KEY}&limit=1`)).response.posts[0];
+
+    let html = `<section><div class="text-xs uppercase tracking-wider text-gray-500 mb-2">Featured Story</div>${card(featured,true)}</section>`;
+
+    for(const section of sections){
+      const resp=await jsonp(`https://api.tumblr.com/v2/blog/${BLOG}/posts?api_key=${API_KEY}&limit=2&tag=${encodeURIComponent(section)}`);
+      if(!resp.response.posts.length) continue;
+      html += `<section><div class="flex items-center justify-between mb-2"><h2 class="font-bold text-sm">${section}</h2><span class="text-[10px] text-red-700">Load more</span></div><div class="space-y-2">`+
+              resp.response.posts.map(p=>card(p,false)).join('')+`</div></section>`;
+    }
+
+    root.innerHTML=html+`<div class="text-center text-[11px] text-gray-500 py-4">Preview of Android app layout/data flow</div>`;
+  }catch(e){
+    root.innerHTML=`<div class="text-sm text-red-600">Unable to load preview: ${e.message}</div>`;
+  }
+}
+document.getElementById('refresh').onclick=load;
+load();
+</script>
+</body>
+</html>
